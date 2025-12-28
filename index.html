@@ -61,7 +61,7 @@
 </head>
 <body>
 
-    <h1>📘 My Personal Dictionary</h1>
+    <h1>📘 My English Master</h1>
 
     <div id="statsBoard" class="stats-container"></div>
 
@@ -70,15 +70,9 @@
         <input type="text" id="newWord" placeholder="Word (e.g., Bitcoin)">
         
         <select id="newCategory" onchange="toggleCustomCategory()">
-            <option value="Noun">Noun</option>
-            <option value="Verb">Verb</option>
-            <option value="Adjective">Adjective</option>
-            <option value="Adverb">Adverb</option>
-            <option value="Idiom">Idiom</option>
-            <option value="Phrasal Verb">Phrasal Verb</option>
-            <option value="Other">Other (Type Custom...)</option>
-        </select>
-        <input type="text" id="customCatInput" placeholder="Type category here (e.g., Finance, Medical)...">
+            </select>
+        
+        <input type="text" id="customCatInput" placeholder="Type category here (e.g., Finance)...">
 
         <textarea id="newDef" placeholder="Meaning and Example Sentence..."></textarea>
         
@@ -97,12 +91,86 @@
     <div id="dictionaryList"></div>
 
     <script>
+        // --- 1. SETUP ---
         let dictionary = JSON.parse(localStorage.getItem('myDictionary')) || [];
         let editingId = null; 
         let isQuizMode = false; 
 
+        // Core categories that ALWAYS exist
+        const BASE_CATEGORIES = ['Noun', 'Verb', 'Adjective', 'Adverb', 'Idiom', 'Phrasal Verb'];
+
+        // Initial Start
         saveAndRender(); 
 
+        // --- 2. NEW LOGIC: Dynamic Category Dropdown ---
+        function renderCategoryDropdown(selectedCategory = null) {
+            const selectBox = document.getElementById('newCategory');
+            
+            // Step A: Count how many times each category is used
+            const counts = {};
+            dictionary.forEach(item => {
+                const cat = item.category;
+                counts[cat] = (counts[cat] || 0) + 1;
+            });
+
+            // Step B: Determine which categories to show
+            // 1. Always include Base Categories
+            // 2. Include any custom category (like Finance) ONLY if count > 5
+            let activeCategories = new Set(BASE_CATEGORIES);
+            Object.keys(counts).forEach(cat => {
+                if (counts[cat] > 5) {
+                    activeCategories.add(cat);
+                }
+            });
+
+            // Step C: Convert to array and SORT
+            let sortedCats = Array.from(activeCategories).sort((a, b) => {
+                // RULE 1: Noun is ALWAYS first
+                if (a === 'Noun') return -1;
+                if (b === 'Noun') return 1;
+
+                // RULE 2: Sort by Popularity (Higher counts at top)
+                const countA = counts[a] || 0;
+                const countB = counts[b] || 0;
+                if (countB !== countA) {
+                    return countB - countA; // Descending order
+                }
+
+                // RULE 3: Alphabetical tie-breaker
+                return a.localeCompare(b);
+            });
+
+            // Step D: Build HTML
+            selectBox.innerHTML = '';
+            sortedCats.forEach(cat => {
+                const option = document.createElement('option');
+                option.value = cat;
+                option.text = `${cat} (${counts[cat] || 0})`; // Shows count too! e.g. "Verb (20)"
+                selectBox.appendChild(option);
+            });
+
+            // Always add "Other" at the bottom
+            const otherOpt = document.createElement('option');
+            otherOpt.value = 'Other';
+            otherOpt.text = 'Other (Type Custom...)';
+            selectBox.appendChild(otherOpt);
+
+            // Step E: Restore selection if needed
+            if (selectedCategory && activeCategories.has(selectedCategory)) {
+                selectBox.value = selectedCategory;
+                document.getElementById('customCatInput').style.display = 'none';
+            } else if (selectedCategory) {
+                // If the word has a category not in the list (count < 5), select "Other" and fill text box
+                selectBox.value = 'Other';
+                document.getElementById('customCatInput').style.display = 'block';
+                document.getElementById('customCatInput').value = selectedCategory;
+            } else {
+                selectBox.value = 'Noun'; // Default
+                document.getElementById('customCatInput').style.display = 'none';
+            }
+        }
+
+        // --- 3. CORE FUNCTIONS ---
         function updateStats() {
             const container = document.getElementById('statsBoard');
             const total = dictionary.length;
@@ -141,23 +209,20 @@
             
             let finalCategory = selectBox.value;
             if (selectBox.value === 'Other') {
-                finalCategory = customInput.value.trim();
+                finalCategory = customInput.value.trim(); // Capitalize first letter helps consistency
+                if (finalCategory) {
+                    finalCategory = finalCategory.charAt(0).toUpperCase() + finalCategory.slice(1);
+                }
                 if (!finalCategory) { alert("Please type a custom category name!"); return; }
             }
 
             if (!word || !definition) { alert("Please write both a word and a definition."); return; }
 
-            // --- NEW: DUPLICATE CHECK ---
-            // Check if word exists (case-insensitive) AND it's not the word we are currently editing
+            // Duplicate Check
             const isDuplicate = dictionary.some(item => 
                 item.word.toLowerCase() === word.toLowerCase() && item.id !== editingId
             );
-
-            if (isDuplicate) {
-                alert("⚠️ This word is already in your dictionary!");
-                return; // Stop here, do not save
-            }
-            // -----------------------------
+            if (isDuplicate) { alert("⚠️ This word is already in your dictionary!"); return; }
 
             if (editingId) {
                 const index = dictionary.findIndex(item => item.id === editingId);
@@ -179,18 +244,8 @@
             document.getElementById('newWord').value = item.word;
             document.getElementById('newDef').value = item.definition;
 
-            const selectBox = document.getElementById('newCategory');
-            const customInput = document.getElementById('customCatInput');
-            let options = Array.from(selectBox.options).map(opt => opt.value);
-            
-            if (options.includes(item.category)) {
-                selectBox.value = item.category;
-                customInput.style.display = 'none';
-            } else {
-                selectBox.value = 'Other';
-                customInput.style.display = 'block';
-                customInput.value = item.category;
-            }
+            // Initialize Dropdown specifically for this word's category
+            renderCategoryDropdown(item.category);
 
             editingId = id;
             document.getElementById('formTitle').innerText = "Edit Word";
@@ -213,19 +268,28 @@
             editingId = null;
             document.getElementById('newWord').value = '';
             document.getElementById('newDef').value = '';
-            document.getElementById('newCategory').value = 'Noun';
             document.getElementById('customCatInput').value = '';
-            document.getElementById('customCatInput').style.display = 'none';
+            
             document.getElementById('formTitle').innerText = "Add New Word";
             const mainBtn = document.getElementById('mainBtn');
             mainBtn.innerText = "Add Word";
             mainBtn.className = "btn btn-primary"; 
             document.getElementById('cancelBtn').style.display = 'none';
+            
+            // Reset dropdown to default state (Noun first)
+            renderCategoryDropdown(); 
         }
 
         function saveAndRender() {
             localStorage.setItem('myDictionary', JSON.stringify(dictionary));
             updateStats();
+            
+            // Update the dropdown logic immediately!
+            // If we are NOT editing, refresh the dropdown to show new counts
+            if (!editingId) {
+                renderCategoryDropdown(); 
+            }
+
             const searchText = document.getElementById('searchBox').value;
             if (searchText) filterWords();
             else renderList(dictionary);
@@ -310,4 +374,3 @@
     </script>
 </body>
 </html>
-
