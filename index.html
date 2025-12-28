@@ -114,8 +114,6 @@
             });
 
             // Step B: Determine which categories to show
-            // 1. Always include Base Categories
-            // 2. Include any custom category (like Finance) ONLY if count > 5
             let activeCategories = new Set(BASE_CATEGORIES);
             Object.keys(counts).forEach(cat => {
                 if (counts[cat] > 5) {
@@ -145,7 +143,8 @@
             sortedCats.forEach(cat => {
                 const option = document.createElement('option');
                 option.value = cat;
-                option.text = `${cat} (${counts[cat] || 0})`; // Shows count too! e.g. "Verb (20)"
+                // --- UPDATE: Removed the (${count}) display ---
+                option.text = cat; 
                 selectBox.appendChild(option);
             });
 
@@ -209,7 +208,7 @@
             
             let finalCategory = selectBox.value;
             if (selectBox.value === 'Other') {
-                finalCategory = customInput.value.trim(); // Capitalize first letter helps consistency
+                finalCategory = customInput.value.trim();
                 if (finalCategory) {
                     finalCategory = finalCategory.charAt(0).toUpperCase() + finalCategory.slice(1);
                 }
@@ -218,7 +217,6 @@
 
             if (!word || !definition) { alert("Please write both a word and a definition."); return; }
 
-            // Duplicate Check
             const isDuplicate = dictionary.some(item => 
                 item.word.toLowerCase() === word.toLowerCase() && item.id !== editingId
             );
@@ -244,7 +242,6 @@
             document.getElementById('newWord').value = item.word;
             document.getElementById('newDef').value = item.definition;
 
-            // Initialize Dropdown specifically for this word's category
             renderCategoryDropdown(item.category);
 
             editingId = id;
@@ -275,20 +272,13 @@
             mainBtn.innerText = "Add Word";
             mainBtn.className = "btn btn-primary"; 
             document.getElementById('cancelBtn').style.display = 'none';
-            
-            // Reset dropdown to default state (Noun first)
             renderCategoryDropdown(); 
         }
 
         function saveAndRender() {
             localStorage.setItem('myDictionary', JSON.stringify(dictionary));
             updateStats();
-            
-            // Update the dropdown logic immediately!
-            // If we are NOT editing, refresh the dropdown to show new counts
-            if (!editingId) {
-                renderCategoryDropdown(); 
-            }
+            if (!editingId) renderCategoryDropdown(); 
 
             const searchText = document.getElementById('searchBox').value;
             if (searchText) filterWords();
